@@ -14,3 +14,5 @@ python3 -m http.server
 ```
 
 And then load the `index.html` in your browser (In the above example: http://0.0.0.0:8000 )
+
+![Map](example/map.png)
