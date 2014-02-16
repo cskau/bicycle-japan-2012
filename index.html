@@ -1,0 +1,313 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>Bike Trip</title>
+    <style type="text/css">
+
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#Map {
+  height: 100%;
+  width: 100%;
+}
+
+    </style>
+    <script type="text/javascript" src="http://openlayers.org/dev/OpenLayers.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&libraries=geometry&sensor=false"></script>
+  </head>
+  <body>
+    <div id="Map"></div>
+
+    <script>
+
+      function elevationHandler(callback) {
+        return function(results, status) {
+          if (status == google.maps.ElevationStatus.OK) {
+            if (!results[0]) {
+              console.error('No results found');
+            }
+            callback(results);
+          } else {
+            console.error('Elevation service failed due to: ' + status);
+          }
+        };
+      }
+
+      function elevation(lon, lat, callback) {
+        var lonlat = new google.maps.LatLng(lat, lon);
+        var elevator = new google.maps.ElevationService();
+        var positionalRequest = {
+          'locations': [lonlat]
+        };
+        //
+        elevator.getElevationForLocations(
+            positionalRequest,
+            elevationHandler(callback)
+            );
+      }
+
+      function elevationPath(path, callback) {
+        var elevator = new google.maps.ElevationService();
+        var pathRequest = {
+          'path': path,
+          'samples': 256
+        }
+        // Initiate the path request.
+        elevator.getElevationAlongPath(
+            pathRequest,
+            elevationHandler(callback)
+            );
+      }
+
+    </script>
+    <script type="text/javascript">
+
+      var MyMap = function() {
+
+        this.lonlat = function(lon, lat) {
+          return new OpenLayers
+              .LonLat(lon, lat)
+              .transform(this.fromProjection, this.toProjection);
+        };
+
+        //
+
+        this.addOSMLayer = function() {
+          var layerOSM = new OpenLayers.Layer.OSM();
+          this.map.addLayer(layerOSM);
+          return layerOSM;
+        };
+
+        this.addCycleLayer = function() {
+          var layerCycleMap = new OpenLayers.Layer.OSM(
+              "OpenCycleMap",
+              [
+                "http://a.tile.opencyclemap.org/cycle/${z}/${x}/${y}.png",
+                "http://b.tile.opencyclemap.org/cycle/${z}/${x}/${y}.png",
+                "http://c.tile.opencyclemap.org/cycle/${z}/${x}/${y}.png"
+              ]);
+          this.map.addLayer(layerCycleMap);
+          return layerCycleMap;
+        };
+
+
+        this.addTSMLayer = function(layerName) {
+          // Tile Map Service
+          var layerTMS = new OpenLayers.Layer.TMS(
+              layerName,
+              [
+                'http://tile1.tile.openstreetmap.org/tiles/',
+                'http://tile2.tile.openstreetmap.org/tiles/'
+              ],
+              {
+                'layername': 'mapnik'
+              }
+              );
+          this.map.addLayer(layerTMS);
+          return layerTMS;
+        };
+
+
+        this.addTextLayer = function(layerName, location) {
+          var layerText = new OpenLayers.Layer.Text(
+              layerName,
+              {
+                location: location,
+                projection: new OpenLayers.Projection("EPSG:4326")
+              });
+          this.map.addLayer(layerText);
+          return layerText;
+        };
+
+
+        this.addVectorLayer = function(layerName, location) {
+          // Add the Layer with the GPX Track
+          var layerVectorGPX = new OpenLayers.Layer.Vector(
+            layerName,
+            {
+              strategies: [new OpenLayers.Strategy.Fixed()],
+              protocol: new OpenLayers.Protocol.HTTP({
+                url: location,
+                format: new OpenLayers.Format.GPX()
+              }),
+              style: {strokeColor: "green", strokeWidth: 5, strokeOpacity: 0.5},
+              projection: new OpenLayers.Projection("EPSG:4326")
+            });
+          this.map.addLayer(layerVectorGPX);
+          return layerVectorGPX;
+        };
+
+
+        this.addMarkersLayer = function(layerName) {
+          var layerMarkers = new OpenLayers.Layer.Markers(layerName);
+          this.map.addLayer(layerMarkers);
+          return layerMarkers;
+        };
+
+
+        this.addMarker = function(layerMarkers, lon, lat, iconLocation) {
+          var size = new OpenLayers.Size(21, 25);
+          var offset = new OpenLayers.Pixel(-(size.w/2), -size.h);
+          var icon = new OpenLayers.Icon(iconLocation, size, offset);
+
+          var position = new OpenLayers
+              .LonLat(lon, lat)
+              .transform(this.fromProjection, this.toProjection);
+
+          var marker = new OpenLayers.Marker(position, icon);
+
+          layerMarkers.addMarker(marker);
+
+          return marker;
+        };
+
+        //
+
+        this.setCenter = function(lon, lat, zoom) {
+          this.map.setCenter(
+              this.lonlat(lon, lat),
+              zoom);
+        };
+
+        //
+
+        // Transform from WGS 1984
+        this.fromProjection = new OpenLayers.Projection("EPSG:4326");
+        // to Spherical Mercator Projection
+        this.toProjection = new OpenLayers.Projection("EPSG:900913");
+
+        //
+        this.map = new OpenLayers.Map("Map");
+
+        return this;
+      }
+
+    </script>
+    <script type="text/javascript">
+
+      var lon = 134.16241;
+      var lat = 34.5401402;
+      var zoom = 9;
+
+      var myMap = new MyMap();
+
+      var layerCycle = myMap.addCycleLayer();
+
+      myMap.setCenter(lon, lat, zoom);
+
+      var layerMarkers = myMap.addMarkersLayer();
+
+
+      OpenLayers.Control.Click = OpenLayers.Class(
+          OpenLayers.Control,
+          {
+            defaultHandlerOptions: {
+                'single': true,
+                'double': false,
+                'pixelTolerance': 0,
+                'stopSingle': false,
+                'stopDouble': false
+            },
+
+            initialize: function(options) {
+                this.handlerOptions = OpenLayers.Util.extend(
+                    {}, this.defaultHandlerOptions
+                );
+                OpenLayers.Control.prototype.initialize.apply(
+                    this, arguments
+                ); 
+                this.handler = new OpenLayers.Handler.Click(
+                    this, {
+                      'click': this.onClick
+                    }, this.handlerOptions
+                );
+            }
+          });
+
+      var control = new OpenLayers.Control.Click({
+          handlerOptions: {
+            "single": true
+          },
+          onClick: function(e) {
+            var lonlat = myMap.map.getLonLatFromViewPortPx(e.xy)
+                .transform(myMap.toProjection, myMap.fromProjection);
+            console.log(
+                '<trkpt lon="' + lonlat.lon + '" lat="' + lonlat.lat + '"></trkpt>');
+            myMap.addMarker(layerMarkers, lonlat.lon, lonlat.lat, 'js/img/marker.png');
+          }
+      });
+      myMap.map.addControl(control);
+
+      control.activate();
+
+
+      var gpxKyotoNara = myMap.addVectorLayer('kyoto_nara', 'tracks/kyoto_nara.gpx');
+      var gpxNaraOsaka = myMap.addVectorLayer('nara_osaka', 'tracks/nara_osaka.gpx');
+      var gpxOsakaArima = myMap.addVectorLayer('osaka_arima', 'tracks/osaka_arima.gpx');
+      var gpxArimaKobe = myMap.addVectorLayer('arima_kobe', 'tracks/arima_kobe.gpx');
+      var gpxKobeHimeji = myMap.addVectorLayer('kobe_himeji', 'tracks/kobe_himeji.gpx');
+      var gpxHimejiOkayama = myMap.addVectorLayer('himeji_okayama', 'tracks/himeji_okayama.gpx');
+      var gpxOkayamaOnomichi = myMap.addVectorLayer('okayama_onomichi', 'tracks/okayama_onomichi.gpx');
+      var gpxOnomichiHiroshima = myMap.addVectorLayer('onomichi_hiroshima', 'tracks/onomichi_hiroshima.gpx');
+
+
+      function olGeoPointToLatlon(points) {
+        var result = [];
+        for (var i = points.length - 1; i >= 0; i--) {
+          var latlon = new OpenLayers.LonLat(points[i].x, points[i].y)
+              .transform(
+                  myMap.toProjection,
+                  myMap.fromProjection);
+          result.push(
+              new google.maps.LatLng(latlon.lat, latlon.lon)
+              );
+        };
+        return result;
+      }
+
+      function getPathLength(path) {
+        var pathLength = google.maps.geometry.spherical.computeLength(path);
+        return pathLength;
+      }
+
+      function computeTotal() {
+        var accLength = 0;
+        accLength += getPathLength(
+            olGeoPointToLatlon(gpxKyotoNara.features[0].geometry.components));
+        accLength += getPathLength(
+            olGeoPointToLatlon(gpxNaraOsaka.features[0].geometry.components));
+        accLength += getPathLength(
+            olGeoPointToLatlon(gpxOsakaArima.features[0].geometry.components));
+        accLength += getPathLength(
+            olGeoPointToLatlon(gpxArimaKobe.features[0].geometry.components));
+        accLength += getPathLength(
+            olGeoPointToLatlon(gpxKobeHimeji.features[0].geometry.components));
+        accLength += getPathLength(
+            olGeoPointToLatlon(gpxHimejiOkayama.features[0].geometry.components));
+        accLength += getPathLength(
+            olGeoPointToLatlon(gpxOkayamaOnomichi.features[0].geometry.components));
+        accLength += getPathLength(
+            olGeoPointToLatlon(gpxOnomichiHiroshima.features[0].geometry.components));
+        return accLength;
+      }
+
+      function getElevation() {
+        var path = olGeoPointToLatlon(
+            gpxKyotoNara.features[0].geometry.components);
+
+        elevationPath(
+            path,
+            function(elevations) {
+              console.log(elevations);
+            }
+            );
+      }
+
+    </script>
+  </body>
+</html>
